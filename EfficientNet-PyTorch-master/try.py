@@ -14,7 +14,12 @@ print(img.shape) # torch.Size([1, 3, 224, 224])
 
 # Load ImageNet class names
 labels_map = json.load(open('labels_map.txt'))
+print(labels_map)
 labels_map = [labels_map[str(i)] for i in range(1000)]
+print(labels_map)
+
+features = model.extract_features(img)
+print(features.shape) # torch.Size([1, 1280, 7, 7])
 
 # Classify
 model.eval()

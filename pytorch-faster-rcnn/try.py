@@ -24,7 +24,7 @@ def getVideoFeatures(video_dir):
         for j in range(len(frames)):
             image_path = video_dir + "/" + videos[i] + "/" + frames[j]
             _,ext = os.path.splitext(image_path)
-            if ext is not 'jpg':
+            if ext != '.jpg':
                 continue
             tfms = transforms.Compose([transforms.Resize(224), transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
