@@ -20,6 +20,8 @@ def getVideoFeatures(video_dir):
 
     objData, relData = parseProjectJson()
     model = EfficientNet.from_pretrained('efficientnet-b0')
+    model.cuda()
+    model.eval()
     # Preprocess image
     tfms = transforms.Compose([transforms.Resize(224), transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
@@ -44,8 +46,8 @@ def getVideoFeatures(video_dir):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
             img = tfms(Image.open(image_path)).unsqueeze(0)
             
-            features = model.extract_features(img)
-            video_features[i][j][:] = torch.flatten(features)
+            features = model.extract_features(img.to(device))
+            video_features[i][j][:] = torch.flatten(features).to("cpu")
 
         torch.detach().numpy().savetxt(video_dir + "/" + videos[i] + "/" + "output.csv", video_features[i])
 
