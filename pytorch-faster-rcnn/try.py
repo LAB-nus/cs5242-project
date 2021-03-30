@@ -23,6 +23,9 @@ def getVideoFeatures(video_dir):
         frames = next(os.walk(video_dir + "/" + videos[i]))[2]
         for j in range(len(frames)):
             image_path = video_dir + "/" + videos[i] + "/" + frames[j]
+            _,ext = os.path.splitext(image_path)
+            if ext is not 'jpg':
+                continue
             tfms = transforms.Compose([transforms.Resize(224), transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
             img = tfms(Image.open(image_path)).unsqueeze(0)
@@ -46,7 +49,7 @@ def getVideoFeatures(video_dir):
         #         image_feature = predictions[0]["boxes"].reshape(-1)
         #         print(image_feature.shape)
             
-getVideoFeatures("D:/GitHub/cs5242-project/train/train")
+getVideoFeatures("../train/train")
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
 # # images, boxes = torch.rand(4, 3, 600, 1200), torch.rand(4, 11, 4)
