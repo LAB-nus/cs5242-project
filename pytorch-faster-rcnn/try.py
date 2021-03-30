@@ -4,6 +4,8 @@ import os
 from PIL import Image
 from torchvision import transforms
 import numpy as np
+import pandas as pd
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 447
@@ -33,23 +35,21 @@ def getVideoFeatures(video_dir):
             predictions = model(img.to(device))
             image_feature = predictions[0]["boxes"].detach().reshape(-1)
             video_features[i][j][:len(image_feature)] = image_feature.to("cpu")
-        np.savetxt(video_dir + "/" + videos[i] + "/" + "output.csv", video_features[i])
+        np.savetxt(video_dir + "/" + videos[i] + "/" + "output.csv", video_features[i], delimiter=',')
 
-            #print(image_feature.shape)
-        # for j in range(len(frames)):
-        #     image_path = video_dir + "/" + videos[i] + "/" + frames[j]
-        #     tfms = transforms.Compose([transforms.Resize(224), transforms.ToTensor(),
-        #     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
-        #     img = tfms(Image.open(image_path))
-        #     imgs[j] = img
-        # for j in range(len(frames)):
-        #     print(imgs.shape)
-        #     with torch.no_grad():
-        #         predictions = model(imgs)
-        #         image_feature = predictions[0]["boxes"].reshape(-1)
-        #         print(image_feature.shape)
-            
-getVideoFeatures("../train/train")
+def getVideoFeaturesFromCsv(video_dir):
+    all_video_features = torch.rand(training_video_nums, video_frames, feature_num, device=device)
+    video_features = torch.rand(training_video_nums, video_frames, feature_num)
+    videos =  next(os.walk(video_dir))[1]
+    for i in range(1):
+        print(videos[i])
+        video_features_file = video_dir + "/" + videos[i] + "/" "output.csv"
+        print(video_features_file)
+        video_features = torch.tensor(pd.read_csv(video_features_file, header=None).values)
+        all_video_features[i] = video_features
+    print(all_video_features)
+#getVideoFeatures("../train/train")
+getVideoFeaturesFromCsv("../train/train")
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
 # # images, boxes = torch.rand(4, 3, 600, 1200), torch.rand(4, 11, 4)
