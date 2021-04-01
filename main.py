@@ -5,6 +5,7 @@ import torch
 import os
 from torchvision import transforms
 import numpy as np
+import torch.nn
 from efficientnet_pytorch import EfficientNet
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -16,12 +17,12 @@ def main():
 def getVideoFeatures(video_dir):
     training_video_nums = 447
     video_frames = 30
-    feature_num = 143360
+    feature_num = 12800
 
     objData, relData = parseProjectJson()
     model = EfficientNet.from_pretrained('efficientnet-b0')
-    model.cuda()
-    model.eval()
+    #model.cuda()
+    #model.eval()
     # Preprocess image
     tfms = transforms.Compose([transforms.Resize(224), transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
@@ -46,10 +47,14 @@ def getVideoFeatures(video_dir):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
             img = tfms(Image.open(image_path)).unsqueeze(0)
             
-            features = model.extract_features(img.to(device))
-            video_features[i][j][:] = torch.flatten(features).to("cpu")
+            features = model.extract_features(img)
+            #print(features.shape)
+            torch_pooling = torch.nn.AvgPool2d(3, stride=3)
+            features_pooling = torch_pooling(features)
+            #print(features_pooling.shape)
+            video_features[i][j][:] = torch.flatten(features_pooling)
 
-        torch.detach().numpy().savetxt(video_dir + "/" + videos[i] + "/" + "output.csv", video_features[i])
+        np.savetxt(video_dir + "/" + videos[i] + "/" + "output.csv", video_features[i].detach().numpy())
 
             #print(image_feature.shape)
         # for j in range(len(frames)):
