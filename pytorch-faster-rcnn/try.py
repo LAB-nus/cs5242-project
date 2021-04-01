@@ -153,7 +153,7 @@ def train():
     dataset = TensorDataset(video_input, obj_1_target, obj_2_target, relation_target)
     train_loader = DataLoader(dataset=dataset, batch_size=32, shuffle=True)
 
-    for epoch in range(3000):  # again, normally you would NOT do 300 epochs, it is toy data
+    for epoch in range(30000):  # again, normally you would NOT do 300 epochs, it is toy data
         total_loss = 0
         for i, data  in enumerate(train_loader):
             input, target_obj_1, target_obj_2, target_relation = data
