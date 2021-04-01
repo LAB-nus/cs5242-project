@@ -68,7 +68,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     elif mode == 'testing':
         video_nums = test_video_nums
 
-    all_video_features = torch.zeros(training_video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
+    all_video_features = torch.zeros(video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
     videos =  next(os.walk(video_dir))[1]
     for i in range(video_nums):
         print(i)
@@ -219,9 +219,9 @@ def test():
     test_loader = DataLoader(dataset = dataset)
     probs = []
     for i, data in enumerate(test_loader):
+        print(np.shape(data))
         model.zero_grad()
-        input = torch.tensor(data)
-        probs = model(input)
+        probs[i] = model(data)
     np.savetxt("out.csv", probs, delimiter=',')
 #getVideoFeatures("../train/train")
 #getVideoFeatures("../test/test")
