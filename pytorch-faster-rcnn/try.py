@@ -11,13 +11,13 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 from efficientnet_pytorch import EfficientNet
-feature_file_name = "efficient_net_feature.csv"
+feature_file_name = "efficient_net_feature_large_2.csv"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 448
 video_frames = 30
-feature_num = 1280
-word_vec_len = 10
+feature_num = 20480
+word_vec_len = 100
 # Training data would be something with size [video_frames, training_video_nums, features_num]
 # For processing the images, we are going to use pretrained model. Thus we can view the input of the network as an array of
 # training_video_nums * video_frames * features_num
@@ -35,7 +35,7 @@ def getVideoFeatures(video_dir):
             _,ext = os.path.splitext(image_path)
             if ext != '.jpg':
                 continue
-            tfms = transforms.Compose([transforms.Resize(224), transforms.ToTensor(),
+            tfms = transforms.Compose([transforms.Resize(224), transforms.CenterCrop(224), transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
             img = tfms(Image.open(image_path)).unsqueeze(0)
             # predictions = model(img.to(device))
@@ -47,7 +47,9 @@ def getVideoFeatures(video_dir):
         np.savetxt(video_dir + "/" + videos[i] + "/" + feature_file_name, video_features[i], delimiter=',')
 
 def compress(img_feature):
-    return torch.mean(img_feature, (2,3)).reshape(-1)
+    m = nn.AvgPool2d((2, 2), stride=(2, 2), padding=1)
+    pooled_feature = m(img_feature)
+    return pooled_feature.reshape(-1)
 
 word_to_idx_1 = {"turtle": 0, "antelope": 1, "bicycle": 2, "lion": 3, "ball": 17, "motorcycle": 5, "cattle": 6, "airplane": 7, "car": 33, "sheep": 8, "horse": 9, "watercraft": 10, "monkey": 11, "fox": 12, "giant_panda": 13, "elephant": 14, "bird": 15, "domestic_cat": 32, "frisbee": 4, "squirrel": 18, "bus": 19, "bear": 21, "tiger": 22, "train": 23, "snake": 24, "rabbit": 25, "whale": 26, "red_panda": 20, "skateboard": 28, "dog": 29, "person": 30, "lizard": 31, "hamster": 16, "sofa": 27, "zebra": 34}
 word_to_idx_2 = {"fly_next_to": 0, "run_with": 1, "left": 2, "lie_behind": 3, "run_above": 4, "jump_toward": 5, "jump_front": 6, "run_behind": 7, "run_front": 8, "walk_past": 9, "sit_left": 10, "stop_left": 11, "right": 12, "move_front": 13, "swim_right": 14, "lie_left": 15, "walk_beneath": 16, "walk_behind": 17, "stop_right": 18, "sit_next_to": 19, "run_next_to": 20, "creep_right": 21, "move_past": 22, "swim_left": 23, "move_beneath": 24, "fly_above": 25, "move_left": 26, "above": 27, "bite": 28, "beneath": 29, "move_behind": 30, "lie_above": 31, "run_left": 32, "move_toward": 33, "next_to": 34, "stand_next_to": 35, "creep_behind": 36, "jump_right": 37, "walk_right": 38, "walk_above": 39, "stand_above": 40, "creep_front": 41, "stand_front": 42, "taller": 43, "stop_beneath": 44, "watch": 45, "jump_beneath": 46, "stand_behind": 47, "lie_next_to": 48, "sit_above": 49, "lie_right": 50, "play": 51, "larger": 52, "sit_inside": 53, "swim_next_to": 54, "sit_behind": 55, "jump_left": 56, "walk_left": 57, "fly_away": 58, "stop_front": 59, "sit_beneath": 60, "creep_left": 61, "move_with": 62, "stand_right": 63, "lie_front": 64, "walk_front": 65, "run_beneath": 66, "behind": 67, "sit_front": 68, "jump_past": 69, "run_right": 70, "walk_toward": 71, "run_past": 72, "front": 73, "sit_right": 74, "stand_left": 75, "jump_behind": 76, "swim_front": 77, "move_right": 78, "walk_next_to": 79, "swim_behind": 80, "stop_behind": 81}
@@ -68,7 +70,7 @@ def getVideoFeaturesFromCsv(video_dir):
     return all_video_features
 
 class LSTM(nn.Module):
-    def __init__(self, seq_num=33, feature_num=1280, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=30, hidden_layer_size_2=30, batch_size=32):
+    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=500, hidden_layer_size_2=500, batch_size=32):
         super().__init__()
         self.batch_size = batch_size
         self.seq_num = seq_num
@@ -152,6 +154,7 @@ def train():
     train_loader = DataLoader(dataset=dataset, batch_size=32, shuffle=True)
 
     for epoch in range(3000):  # again, normally you would NOT do 300 epochs, it is toy data
+        total_loss = 0
         for i, data  in enumerate(train_loader):
             input, target_obj_1, target_obj_2, target_relation = data
             input = torch.transpose(input, 1, 0)
@@ -163,10 +166,12 @@ def train():
             loss_obj_2 = loss_function(m(out[1]), target_obj_2)
             loss_obj_3 = loss_function(m(out[2]), target_relation)
             loss = loss_obj_1 +loss_obj_3 + loss_obj_2
-            if epoch % 100 == 0:
-                print(loss)
+            total_loss += loss
             loss.backward()
             optimizer.step()
+        if epoch % 100 == 0:
+            print("epoch:", epoch, "loss", total_loss)
+            print(total_loss)
 
     # # See what the scores are after training
     # with torch.no_grad():
