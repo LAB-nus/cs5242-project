@@ -15,6 +15,7 @@ feature_file_name = "efficient_net_feature_large_2.csv"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 448
+test_video_nums = 2
 video_frames = 30
 feature_num = 20480
 word_vec_len = 100
@@ -60,10 +61,16 @@ for word in word_to_idx_2:
     word_to_idx[word] = word_to_idx_2[word] + len(word_to_idx_1)
 embeds = nn.Embedding(len(word_to_idx), word_vec_len).to(device)  
 
-def getVideoFeaturesFromCsv(video_dir):
+def getVideoFeaturesFromCsv(video_dir, mode):
+    video_nums = 0
+    if mode == 'training':
+        video_nums = training_video_nums
+    elif mode == 'testing':
+        video_nums = test_video_nums
+
     all_video_features = torch.zeros(training_video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
     videos =  next(os.walk(video_dir))[1]
-    for i in range(training_video_nums):
+    for i in range(video_nums):
         print(i)
         video_features_file = video_dir + "/" + videos[i] + "/" + feature_file_name
         video_features = torch.tensor(pd.read_csv(video_features_file, header=None).values)
@@ -155,7 +162,7 @@ def getScore(prob, target):
     return score / batch
 
 def train():
-    video_input = getVideoFeaturesFromCsv("../train/train")
+    video_input = getVideoFeaturesFromCsv("../train/train", 'training')
     #video_input = torch.transpose(video_input, 1,0)
     #print(video_input.shape)
     model = LSTM()
@@ -187,6 +194,8 @@ def train():
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
         if epoch > 0 and epoch % 300 == 0:
             torch.save(model.state_dict(), "model_after_"+str(epoch))
+        if epoch > 0 and epoch % 10000 == 0:
+            test()
     # # See what the scores are after training
     # with torch.no_grad():
     #     inputs = prepare_sequence(training_data[0][0], word_to_ix)
@@ -200,8 +209,24 @@ def train():
     #     # Which is DET NOUN VERB DET NOUN, the correct sequence!
     #     print(tag_scores)
 
+def test():
+    model = LSTM()
+    model.to(device)
+    model.load_state_dict(torch.load("model_after_300"))
+    model.eval()
+    video_input = getVideoFeaturesFromCsv("../test/test", 'testing')
+    dataset = TensorDataset(video_input)
+    test_loader = DataLoader(dataset = dataset)
+    probs = []
+    for i, data in enumerate(test_loader):
+        model.zero_grad()
+        input = torch.tensor(data)
+        probs = model(input)
+    np.savetxt("out.csv", probs, delimiter=',')
 #getVideoFeatures("../train/train")
-train()
+#getVideoFeatures("../test/test")
+#train()
+test()
 
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
