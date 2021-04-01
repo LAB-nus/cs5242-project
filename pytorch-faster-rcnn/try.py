@@ -139,7 +139,7 @@ def getTargets(batch_size):
         obj_2_target[idx] = target[2]
         relation_target[idx] = target[1]
         idx += 1
-    return obj_1_target, obj_2_target, relation_target
+    return obj_1_target, relation_target, obj_2_target
 
 def train():
     video_input = getVideoFeaturesFromCsv("../train/train")
@@ -147,11 +147,11 @@ def train():
     #print(video_input.shape)
     model = LSTM()
     model.to(device)
-    obj_1_target, obj_2_target, relation_target = getTargets(448)
+    obj_1_target, relation_target, obj_2_target = getTargets(448)
     loss_function = nn.NLLLoss()
     m = nn.LogSoftmax(dim=1)
     optimizer = optim.SGD(model.parameters(), lr=0.1)
-    dataset = TensorDataset(video_input, obj_1_target, obj_2_target, relation_target)
+    dataset = TensorDataset(video_input, obj_1_target, relation_target, obj_2_target)
     train_loader = DataLoader(dataset=dataset, batch_size=32, shuffle=True)
 
     for epoch in range(30000):  # again, normally you would NOT do 300 epochs, it is toy data
@@ -164,9 +164,9 @@ def train():
             out = model(input)
 
             loss_obj_1 = loss_function(m(out[0]), target_obj_1)
-            loss_obj_2 = loss_function(m(out[1]), target_obj_2)
-            loss_obj_3 = loss_function(m(out[2]), target_relation)
-            loss = loss_obj_1 +loss_obj_3 + loss_obj_2
+            loss_relation = loss_function(m(out[1]), target_relation)
+            loss_obj_2 = loss_function(m(out[2]), target_obj_2)
+            loss = loss_obj_1 +loss_relation + loss_obj_2
             total_loss += loss
             loss.backward()
             optimizer.step()
