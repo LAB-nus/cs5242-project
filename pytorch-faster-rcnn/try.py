@@ -15,7 +15,7 @@ feature_file_name = "efficient_net_feature_large_2.csv"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 448
-test_video_nums = 2
+test_video_nums = 128
 video_frames = 30
 feature_num = 20480
 word_vec_len = 100
@@ -68,9 +68,9 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     elif mode == 'testing':
         video_nums = test_video_nums
 
-    all_video_features = torch.zeros(training_video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
+    all_video_features = torch.zeros(video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
     videos =  next(os.walk(video_dir))[1]
-    for i in range(video_nums):
+    for i in range(test_video_nums):
         print(i)
         video_features_file = video_dir + "/" + videos[i] + "/" + feature_file_name
         video_features = torch.tensor(pd.read_csv(video_features_file, header=None).values)
@@ -99,6 +99,7 @@ class LSTM(nn.Module):
 
     def forward(self, input):
         #print(input.shape)
+        print(input)
         _, batch, _ = input.shape
         lstm_out_1, _ = self.lstm_1(input, self.hidden_cell_1) #  (seq_len, batch, num_directions * hidden_size)
         lstm_out_2 = self.hidden_cell_2
@@ -209,20 +210,45 @@ def train():
     #     # Which is DET NOUN VERB DET NOUN, the correct sequence!
     #     print(tag_scores)
 
+def get_top_5(prob):
+    chosen = torch.topk(prob, 5).indices
+    res = ""
+    for i in range(5):
+        res = res + str(chosen[i].item())
+        if i != 4:
+            res = res + " "
+    return res
+        
+    #return "1 2 3 4 5"
 def test():
     model = LSTM()
     model.to(device)
-    model.load_state_dict(torch.load("model_after_300"))
+    model.load_state_dict(torch.load("model_after_900"))
     model.eval()
     video_input = getVideoFeaturesFromCsv("../test/test", 'testing')
-    dataset = TensorDataset(video_input)
-    test_loader = DataLoader(dataset = dataset)
+    #video_input = torch.transpose(video_input, 1, 0)
+    # dataset = TensorDataset(video_input)
+    # test_loader = DataLoader(dataset = dataset)
+    prediction = []
+    prediction.append(["Id", "label"])
     probs = []
-    for i, data in enumerate(test_loader):
-        model.zero_grad()
-        input = torch.tensor(data)
-        probs = model(input)
-    np.savetxt("out.csv", probs, delimiter=',')
+    model.zero_grad()
+    id = 1
+    for i in range(4):
+        batch_input = video_input[i*32:i*32+32]
+        batch_input = torch.transpose(batch_input, 1, 0)
+        obj_1, relation, obj_2 = model(batch_input)
+        for j in range(32):
+            if id > 119 * 3:
+                break
+            prediction.append([str(id-1), get_top_5(obj_1[j])])
+            id += 1            
+            prediction.append([str(id-1), get_top_5(relation[j])])
+            id += 1            
+            prediction.append([str(id-1), get_top_5(obj_2[j])])
+            id += 1            
+    print(prediction)
+    np.savetxt("out3.csv", prediction, delimiter=',', fmt="%s")
 #getVideoFeatures("../train/train")
 #getVideoFeatures("../test/test")
 #train()
