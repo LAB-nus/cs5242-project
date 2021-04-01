@@ -63,7 +63,8 @@ embeds = nn.Embedding(len(word_to_idx), word_vec_len).to(device)
 def getVideoFeaturesFromCsv(video_dir):
     all_video_features = torch.zeros(training_video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
     videos =  next(os.walk(video_dir))[1]
-    for i in range(1):
+    for i in range(training_video_nums):
+        print(i)
         video_features_file = video_dir + "/" + videos[i] + "/" + feature_file_name
         video_features = torch.tensor(pd.read_csv(video_features_file, header=None).values)
         all_video_features[i][:-3] = video_features
@@ -81,9 +82,9 @@ class LSTM(nn.Module):
         for i in range(seq_num):
             self.lstm_2.append(nn.LSTMCell(hidden_layer_size_1+word_vec_len, hidden_layer_size_2).to(device))
         #print(self.lstm_2)
-        self.linear_obj_1 = nn.Linear(hidden_layer_size_2 + word_vec_len, obj_label_num)
-        self.linear_obj_2 = nn.Linear(hidden_layer_size_2 + word_vec_len, obj_label_num)
-        self.linear_relation = nn.Linear(hidden_layer_size_2 + word_vec_len, relation_label_num)
+        self.linear_obj_1 = nn.Linear(hidden_layer_size_2, obj_label_num)
+        self.linear_obj_2 = nn.Linear(hidden_layer_size_2, obj_label_num)
+        self.linear_relation = nn.Linear(hidden_layer_size_2, relation_label_num)
         self.hidden_cell_1 = (torch.zeros(1, batch_size, hidden_layer_size_1, device=device),
                             torch.zeros(1, batch_size, hidden_layer_size_1, device=device))
         self.hidden_cell_2 = (torch.zeros(batch_size, hidden_layer_size_2, device=device),
@@ -106,7 +107,7 @@ class LSTM(nn.Module):
         # For the last two words, we would like to use the word predicted previously.
         hx, _ = lstm_out_2
         #print(hx.shape)
-        obj_1_prediction = self.linear_obj_1(torch.cat((hx, word_vec), 1)) # batch * obj_label_num
+        obj_1_prediction = self.linear_obj_1(hx) # batch * obj_label_num
         out.append(obj_1_prediction)
         chosen = torch.argmax(obj_1_prediction, dim=1)
         word_vec = embeds(chosen)
@@ -114,16 +115,16 @@ class LSTM(nn.Module):
         input_for_cell = torch.cat((lstm_out_1[self.seq_num-2], word_vec), 1)            
         lstm_out_2 = self.lstm_2[self.seq_num-2](input_for_cell, lstm_out_2)
         hx, _ = lstm_out_2
-        obj_2_prediction = self.linear_obj_2(torch.cat((hx, word_vec), 1)) # batch * obj_label_num
-        out.append(obj_2_prediction)
-        chosen = torch.argmax(obj_2_prediction, dim=1)
-        word_vec = embeds(chosen)
+        relation_prediction = self.linear_relation(hx) # batch * obj_label_num
+        out.append(relation_prediction)
+        chosen = torch.argmax(relation_prediction, dim=1)
+        word_vec = embeds(chosen+35)
 
         input_for_cell = torch.cat((lstm_out_1[self.seq_num-1], word_vec), 1)            
         lstm_out_2 = self.lstm_2[self.seq_num-1](input_for_cell, lstm_out_2)
         hx, _ = lstm_out_2
-        relation_prediction = self.linear_relation(torch.cat((hx, word_vec), 1)) # batch * obj_label_num
-        out.append(relation_prediction)
+        obj_2_prediction = self.linear_obj_2(hx) # batch * obj_label_num
+        out.append(obj_2_prediction)
 
         return out
 
@@ -156,7 +157,7 @@ def train():
     for epoch in range(30000):  # again, normally you would NOT do 300 epochs, it is toy data
         total_loss = 0
         for i, data  in enumerate(train_loader):
-            input, target_obj_1, target_obj_2, target_relation = data
+            input, target_obj_1, target_relation, target_obj_2 = data
             input = torch.transpose(input, 1, 0)
             model.zero_grad()
 
