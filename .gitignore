@@ -1,1 +1,3 @@
 *.csv
+pytorch-faster-rcnn/model_after_600
+pytorch-faster-rcnn/model_after_300

@@ -141,6 +141,19 @@ def getTargets(batch_size):
         idx += 1
     return obj_1_target, relation_target, obj_2_target
 
+def getScore(prob, target):
+    score_map = [1, 0.5, 0.33, 0.25, 0.2]
+    score = .0
+    batch, _ = prob.shape
+    for i in range(batch):
+        rank = 0
+        for j in range(len(prob[i])):
+            if prob[i][j] > prob[i][target[i]]:
+                rank+=1
+        if rank < 5:
+            score += score_map[rank]
+    return score / batch
+
 def train():
     video_input = getVideoFeaturesFromCsv("../train/train")
     #video_input = torch.transpose(video_input, 1,0)
@@ -171,9 +184,9 @@ def train():
             loss.backward()
             optimizer.step()
         if epoch % 100 == 0:
-            print("epoch:", epoch, "loss", total_loss)
-            print(total_loss)
-
+            print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
+        if epoch > 0 and epoch % 300 == 0:
+            torch.save(model.state_dict(), "model_after_"+str(epoch))
     # # See what the scores are after training
     # with torch.no_grad():
     #     inputs = prepare_sequence(training_data[0][0], word_to_ix)
