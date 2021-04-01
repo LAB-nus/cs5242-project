@@ -15,18 +15,23 @@ feature_file_name = "efficient_net_feature_large_2.csv"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 448
-test_video_nums = 2
+test_video_nums = 128
 video_frames = 30
 feature_num = 20480
 word_vec_len = 100
 # Training data would be something with size [video_frames, training_video_nums, features_num]
 # For processing the images, we are going to use pretrained model. Thus we can view the input of the network as an array of
 # training_video_nums * video_frames * features_num
-def getVideoFeatures(video_dir):
+def getVideoFeatures(video_dir, mode):
     model = EfficientNet.from_pretrained('efficientnet-b0')
     model.cuda()
     model.eval()
-    video_features = torch.zeros(training_video_nums, video_frames, feature_num)    
+    if mode == 'trainig':
+        video_nums = training_video_nums
+    elif mode == 'testing':
+        video_nums = test_video_nums
+
+    video_features = torch.zeros(video_nums, video_frames, feature_num)    
     videos =  next(os.walk(video_dir))[1]
     for i in range(len(videos)):
         print(videos[i])
@@ -179,6 +184,7 @@ def train():
         for i, data  in enumerate(train_loader):
             input, target_obj_1, target_relation, target_obj_2 = data
             input = torch.transpose(input, 1, 0)
+            #print(input.shape)
             model.zero_grad()
 
             out = model(input)
@@ -215,16 +221,18 @@ def test():
     model.load_state_dict(torch.load("model_after_300"))
     model.eval()
     video_input = getVideoFeaturesFromCsv("../test/test", 'testing')
-    dataset = TensorDataset(video_input)
-    test_loader = DataLoader(dataset = dataset)
-    probs = []
-    for i, data in enumerate(test_loader):
-        print(np.shape(data))
-        model.zero_grad()
-        probs[i] = model(data)
-    np.savetxt("out.csv", probs, delimiter=',')
-#getVideoFeatures("../train/train")
-#getVideoFeatures("../test/test")
+    model.zero_grad()
+    result = np.array()
+    for i in range(4):
+        input = video_input[32*i : 32 * (i + 1)]
+        input = torch.transpose(input,1,0)
+        probs = model(input)
+        result.append(probs)
+        for j in range(3):
+            np.savetxt("out.csv", result[j].detach().to("cpu"), delimiter=',')
+        
+#getVideoFeatures("../train/train", 'training')
+#getVideoFeatures("../test/test", 'testing')
 #train()
 test()
 
