@@ -83,7 +83,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     return all_video_features
 
 class LSTM(nn.Module):
-    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=500, hidden_layer_size_2=500, batch_size=32):
+    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=200, hidden_layer_size_2=200, batch_size=32):
         super().__init__()
         self.batch_size = batch_size
         self.seq_num = seq_num
@@ -222,19 +222,25 @@ def test():
     model.eval()
     video_input = getVideoFeaturesFromCsv("../test/test", 'testing')
     model.zero_grad()
-    result = np.array()
+    result_obj1 = np.zeros((128,35))
+    result_relation = np.zeros((128,82))
+    result_obj2 = np.zeros((128,35))
     for i in range(4):
         input = video_input[32*i : 32 * (i + 1)]
         input = torch.transpose(input,1,0)
         probs = model(input)
-        result.append(probs)
-        for j in range(3):
-            np.savetxt("out.csv", result[j].detach().to("cpu"), delimiter=',')
+        result_obj1[32*i : 32 * (i + 1)] = probs[0].detach().to("cpu")
+        result_relation[32*i : 32 * (i + 1)] = probs[1].detach().to("cpu")
+        result_obj2[32*i : 32 * (i + 1)] = probs[2].detach().to("cpu")
+        
+    np.savetxt("result_obj1.csv", result_obj1, delimiter=',')
+    np.savetxt("result_relation.csv", result_relation, delimiter=',')
+    np.savetxt("result_obj2.csv", result_obj2, delimiter=',')
         
 #getVideoFeatures("../train/train", 'training')
 #getVideoFeatures("../test/test", 'testing')
-#train()
-test()
+train()
+#test()
 
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
