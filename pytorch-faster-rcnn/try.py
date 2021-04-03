@@ -22,11 +22,16 @@ word_vec_len = 100
 # Training data would be something with size [video_frames, training_video_nums, features_num]
 # For processing the images, we are going to use pretrained model. Thus we can view the input of the network as an array of
 # training_video_nums * video_frames * features_num
-def getVideoFeatures(video_dir):
+def getVideoFeatures(video_dir, mode):
     model = EfficientNet.from_pretrained('efficientnet-b0')
     model.cuda()
     model.eval()
-    video_features = torch.zeros(training_video_nums, video_frames, feature_num)    
+    if mode == 'training':
+        video_nums = training_video_nums
+    elif mode == 'testing':
+        video_nums = test_video_nums
+
+    video_features = torch.zeros(video_nums, video_frames, feature_num)    
     videos =  next(os.walk(video_dir))[1]
     for i in range(len(videos)):
         print(videos[i])
@@ -41,6 +46,7 @@ def getVideoFeatures(video_dir):
             img = tfms(Image.open(image_path)).unsqueeze(0)
             # predictions = model(img.to(device))
             features = model.extract_features(img.to(device)).detach()
+            #compressed_features = features.reshape(-1)
             compressed_features = compress(features)
             print(compressed_features.shape)
         #     image_feature = predictions[0]["boxes"].detach().reshape(-1)
@@ -71,6 +77,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     all_video_features = torch.zeros(video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
     videos =  next(os.walk(video_dir))[1]
     for i in range(video_nums):
+        print(i)
         video_features_file = video_dir + "/" + videos[i] + "/" + feature_file_name
         print(video_features_file)
         video_features = torch.tensor(pd.read_csv(video_features_file, header=None).values)
@@ -99,6 +106,7 @@ class LSTM(nn.Module):
 
     def forward(self, input):
         #print(input.shape)
+        #print(input)
         _, batch, _ = input.shape
         lstm_out_1, _ = self.lstm_1(input, self.hidden_cell_1) #  (seq_len, batch, num_directions * hidden_size)
         lstm_out_2 = self.hidden_cell_2
@@ -157,7 +165,6 @@ def getScore(prob, target):
     return score / batch
 
 def train():
-    video_input = getVideoFeaturesFromCsv("../train/train", 'training')
     #video_input = torch.transpose(video_input, 1,0)
     #print(video_input.shape)
     model = LSTM()
@@ -166,7 +173,7 @@ def train():
     loss_function = nn.NLLLoss()
     m = nn.LogSoftmax(dim=1)
     optimizer = optim.SGD(model.parameters(), lr=0.1)
-    dataset = TensorDataset(video_input, obj_1_target, relation_target, obj_2_target)
+    dataset = TensorDataset(video_input_training, obj_1_target, relation_target, obj_2_target)
     train_loader = DataLoader(dataset=dataset, batch_size=32, shuffle=True)
 
     for epoch in range(30000):  # again, normally you would NOT do 300 epochs, it is toy data
@@ -188,9 +195,10 @@ def train():
         if epoch % 100 == 0:
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
         if epoch > 0 and epoch % 300 == 0:
-            torch.save(model, "v1_model_after_"+str(epoch))
-        if epoch > 0 and epoch % 10000 == 0:
-            test()
+            model_name = "model_after_"+str(epoch)
+            torch.save(model, model_name)
+        if epoch > 0 and epoch % 300 == 0:
+            test(str(epoch), model_name)
     # # See what the scores are after training
     # with torch.no_grad():
     #     inputs = prepare_sequence(training_data[0][0], word_to_ix)
@@ -218,13 +226,10 @@ def get_top_5(prob):
     return res
         
     #return "1 2 3 4 5"
-def test(res_name):
-    model = torch.load('v1_model_after_300')
-    print(model.state_dict)
-    print(model.hidden_cell_1)
-    #model.eval()
+def test(epoch, model_name):
+    model = torch.load(model_name)
     model.to(device)
-    video_input = getVideoFeaturesFromCsv("../test/test", 'testing')
+    model.eval()
     #video_input = torch.transpose(video_input, 1, 0)
     # dataset = TensorDataset(video_input)
     # test_loader = DataLoader(dataset = dataset)
@@ -233,8 +238,9 @@ def test(res_name):
     probs = []
     model.zero_grad()
     id = 1
+    outputFileName = epoch + '.csv'
     for i in range(4):
-        batch_input = video_input[i*32:i*32+32]
+        batch_input = video_input_testing[i*32:i*32+32]
         batch_input = torch.transpose(batch_input, 1, 0)
         obj_1, relation, obj_2 = model(batch_input)
         for j in range(32):
@@ -247,11 +253,13 @@ def test(res_name):
             prediction.append([str(id-1), get_top_5(obj_2[j])])
             id += 1            
     print(prediction)
-    np.savetxt(res_name, prediction, delimiter=',', fmt="%s")
-#getVideoFeatures("../train/train")
-#getVideoFeatures("../test/test")
-#train()
-test("output_7.csv")
+    np.savetxt(outputFileName, prediction, delimiter=',', fmt="%s")
+#getVideoFeatures("../train/train", 'training')
+#getVideoFeatures("../test/test", 'testing')
+video_input_training = getVideoFeaturesFromCsv("../train/train", 'training')
+video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
+train()
+#test()
 
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
