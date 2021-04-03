@@ -17,7 +17,7 @@ print(device)
 training_video_nums = 448
 test_video_nums = 128
 video_frames = 30
-feature_num = 62720
+feature_num = 20480
 word_vec_len = 100
 # Training data would be something with size [video_frames, training_video_nums, features_num]
 # For processing the images, we are going to use pretrained model. Thus we can view the input of the network as an array of
@@ -46,8 +46,8 @@ def getVideoFeatures(video_dir, mode):
             img = tfms(Image.open(image_path)).unsqueeze(0)
             # predictions = model(img.to(device))
             features = model.extract_features(img.to(device)).detach()
-            compressed_features = features.reshape(-1)
-            #compressed_features = compress(features)
+            #compressed_features = features.reshape(-1)
+            compressed_features = compress(features)
             print(compressed_features.shape)
         #     image_feature = predictions[0]["boxes"].detach().reshape(-1)
             video_features[i][j][:len(compressed_features)] = compressed_features.to("cpu")
@@ -105,7 +105,7 @@ class LSTM(nn.Module):
 
     def forward(self, input):
         #print(input.shape)
-        print(input)
+        #print(input)
         _, batch, _ = input.shape
         lstm_out_1, _ = self.lstm_1(input, self.hidden_cell_1) #  (seq_len, batch, num_directions * hidden_size)
         lstm_out_2 = self.hidden_cell_2
@@ -198,10 +198,11 @@ def train():
             optimizer.step()
         if epoch % 100 == 0:
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
-        if epoch > 0 and epoch % 300 == 0:
-            torch.save(model, "model_after_"+str(epoch))
-        if epoch > 0 and epoch % 10000 == 0:
-            test(str(epoch))
+        if epoch > 0 and epoch % 1000 == 0:
+            model_name = "model_after_"+str(epoch)
+            torch.save(model, model_name)
+        if epoch > 0 and epoch % 1000 == 0:
+            test(str(epoch), model_name)
     # # See what the scores are after training
     # with torch.no_grad():
     #     inputs = prepare_sequence(training_data[0][0], word_to_ix)
@@ -225,10 +226,9 @@ def get_top_5(prob):
     return res
         
     #return "1 2 3 4 5"
-def test(epoch):
-    model = LSTM()
+def test(epoch, model_name):
+    model = torch.load(model_name)
     model.to(device)
-    model.load_state_dict(torch.load("model_after_900"))
     model.eval()
     #video_input = torch.transpose(video_input, 1, 0)
     # dataset = TensorDataset(video_input)
