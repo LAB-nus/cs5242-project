@@ -70,9 +70,9 @@ def getVideoFeaturesFromCsv(video_dir, mode):
 
     all_video_features = torch.zeros(video_nums, video_frames+3, feature_num, device=device) # Plus 3 as we have three extra sequence for output
     videos =  next(os.walk(video_dir))[1]
-    for i in range(test_video_nums):
-        print(i)
+    for i in range(video_nums):
         video_features_file = video_dir + "/" + videos[i] + "/" + feature_file_name
+        print(video_features_file)
         video_features = torch.tensor(pd.read_csv(video_features_file, header=None).values)
         all_video_features[i][:-3] = video_features
     return all_video_features
@@ -99,7 +99,6 @@ class LSTM(nn.Module):
 
     def forward(self, input):
         #print(input.shape)
-        print(input)
         _, batch, _ = input.shape
         lstm_out_1, _ = self.lstm_1(input, self.hidden_cell_1) #  (seq_len, batch, num_directions * hidden_size)
         lstm_out_2 = self.hidden_cell_2
@@ -150,16 +149,11 @@ def getTargets(batch_size):
     return obj_1_target, relation_target, obj_2_target
 
 def getScore(prob, target):
-    score_map = [1, 0.5, 0.33, 0.25, 0.2]
     score = .0
     batch, _ = prob.shape
     for i in range(batch):
-        rank = 0
-        for j in range(len(prob[i])):
-            if prob[i][j] > prob[i][target[i]]:
-                rank+=1
-        if rank < 5:
-            score += score_map[rank]
+        if target[i] == torch.argmax(prob[i]):
+            score+=1
     return score / batch
 
 def train():
@@ -194,7 +188,7 @@ def train():
         if epoch % 100 == 0:
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
         if epoch > 0 and epoch % 300 == 0:
-            torch.save(model.state_dict(), "model_after_"+str(epoch))
+            torch.save(model, "v1_model_after_"+str(epoch))
         if epoch > 0 and epoch % 10000 == 0:
             test()
     # # See what the scores are after training
@@ -212,19 +206,24 @@ def train():
 
 def get_top_5(prob):
     chosen = torch.topk(prob, 5).indices
+    print("debugchosen")
+    print(prob)
+    print(chosen)
     res = ""
     for i in range(5):
         res = res + str(chosen[i].item())
         if i != 4:
             res = res + " "
+    print(res)
     return res
         
     #return "1 2 3 4 5"
-def test():
-    model = LSTM()
+def test(res_name):
+    model = torch.load('v1_model_after_300')
+    print(model.state_dict)
+    print(model.hidden_cell_1)
+    #model.eval()
     model.to(device)
-    model.load_state_dict(torch.load("model_after_900"))
-    model.eval()
     video_input = getVideoFeaturesFromCsv("../test/test", 'testing')
     #video_input = torch.transpose(video_input, 1, 0)
     # dataset = TensorDataset(video_input)
@@ -248,11 +247,11 @@ def test():
             prediction.append([str(id-1), get_top_5(obj_2[j])])
             id += 1            
     print(prediction)
-    np.savetxt("out3.csv", prediction, delimiter=',', fmt="%s")
+    np.savetxt(res_name, prediction, delimiter=',', fmt="%s")
 #getVideoFeatures("../train/train")
 #getVideoFeatures("../test/test")
 #train()
-test()
+test("output_7.csv")
 
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
