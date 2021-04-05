@@ -85,7 +85,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     return all_video_features
 
 class LSTM(nn.Module):
-    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=500, hidden_layer_size_2=500, batch_size=32):
+    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=500, hidden_layer_size_2=500, batch_size=16):
         super().__init__()
         self.batch_size = batch_size
         self.seq_num = seq_num
@@ -143,8 +143,8 @@ class LSTM(nn.Module):
 
         return out
 
-def getTargets(batch_size):
-    json_target = json.load(open('../training_annotation.json'))
+def getTargets(batch_size, file_name='../training_annotation.json'):
+    json_target = json.load(open(file_name))
     obj_1_target = torch.zeros(batch_size, device=device, dtype=int)
     obj_2_target = torch.zeros(batch_size, device=device, dtype=int)
     relation_target = torch.zeros(batch_size, device=device, dtype=int)
@@ -164,17 +164,24 @@ def getScore(prob, target):
             score+=1
     return score / batch
 
-def train():
+def train(video_input_training, video_input_testing):
     #video_input = torch.transpose(video_input, 1,0)
     #print(video_input.shape)
     model = LSTM()
     model.to(device)
-    obj_1_target, relation_target, obj_2_target = getTargets(448)
+    obj_1_target, relation_target, obj_2_target = getTargets(448, file_name='../training_annotation.json')
+    obj_1_test, relation_test, obj_2_test = getTargets(128, file_name='../test_annotation.json')
+
     loss_function = nn.NLLLoss()
     m = nn.LogSoftmax(dim=1)
     optimizer = optim.SGD(model.parameters(), lr=0.1)
+    video_input_training = torch.cat((video_input_training, video_input_testing), 0)
+    obj_1_target = torch.cat((obj_1_target, obj_1_test), 0)
+    obj_2_target = torch.cat((obj_2_target, obj_2_test), 0)
+    relation_target = torch.cat((relation_target, relation_test), 0)
+    print(video_input_training.shape, obj_1_target.shape, relation_target.shape, obj_2_target.shape)
     dataset = TensorDataset(video_input_training, obj_1_target, relation_target, obj_2_target)
-    train_loader = DataLoader(dataset=dataset, batch_size=32, shuffle=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
 
     for epoch in range(30000):  # again, normally you would NOT do 300 epochs, it is toy data
         total_loss = 0
@@ -195,10 +202,10 @@ def train():
         if epoch % 100 == 0:
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
         if epoch > 0 and epoch % 300 == 0:
-            model_name = "model_after_"+str(epoch)
+            model_name = "csz_model_after_"+str(epoch)
             torch.save(model, model_name)
-        if epoch > 0 and epoch % 300 == 0:
-            test(str(epoch), model_name)
+        # if epoch > 0 and epoch % 300 == 0:
+        #     test(str(epoch), model_name)
     # # See what the scores are after training
     # with torch.no_grad():
     #     inputs = prepare_sequence(training_data[0][0], word_to_ix)
@@ -239,11 +246,11 @@ def test(epoch, model_name):
     model.zero_grad()
     id = 1
     outputFileName = epoch + '.csv'
-    for i in range(4):
-        batch_input = video_input_testing[i*32:i*32+32]
+    for i in range(8):
+        batch_input = video_input_testing[i*16:i*16+16]
         batch_input = torch.transpose(batch_input, 1, 0)
         obj_1, relation, obj_2 = model(batch_input)
-        for j in range(32):
+        for j in range(16):
             if id > 119 * 3:
                 break
             prediction.append([str(id-1), get_top_5(obj_1[j])])
@@ -258,8 +265,8 @@ def test(epoch, model_name):
 #getVideoFeatures("../test/test", 'testing')
 video_input_training = getVideoFeaturesFromCsv("../train/train", 'training')
 video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
-train()
-#test()
+#train(video_input_training, video_input_testing)
+test("2400", "csz_model_after_2400")
 
 # model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, num_classes=91)
 # # # For training
