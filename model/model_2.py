@@ -11,13 +11,13 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 from efficientnet_pytorch import EfficientNet
-feature_file_name = "efficient_net_feature_large_2.csv"
+feature_file_name = "efficient_net_feature_large_3.csv"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 448
 test_video_nums = 128
 video_frames = 30
-feature_num = 20480
+feature_num = 46080
 word_vec_len = 100
 # Training data would be something with size [video_frames, training_video_nums, features_num]
 # For processing the images, we are going to use pretrained model. Thus we can view the input of the network as an array of
@@ -41,7 +41,7 @@ def getVideoFeatures(video_dir, mode):
             _,ext = os.path.splitext(image_path)
             if ext != '.jpg':
                 continue
-            tfms = transforms.Compose([transforms.Resize(224), transforms.CenterCrop(224), transforms.ToTensor(),
+            tfms = transforms.Compose([transforms.Resize(1280), transforms.CenterCrop(1280), transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
             img = tfms(Image.open(image_path)).unsqueeze(0)
             features = model.extract_features(img.to(device)).detach()
@@ -51,7 +51,7 @@ def getVideoFeatures(video_dir, mode):
         np.savetxt(video_dir + "/" + videos[i] + "/" + feature_file_name, video_features[i], delimiter=',')
 
 def compress(img_feature):
-    m = nn.AvgPool2d((2, 2), stride=(2, 2), padding=1)
+    m = nn.AvgPool2d((7, 7), stride=(7, 7), padding=1)
     pooled_feature = m(img_feature)
     return pooled_feature.reshape(-1)
 
@@ -82,7 +82,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     return all_video_features
 
 class LSTM(nn.Module):
-    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=500, hidden_layer_size_2=500, batch_size=16):
+    def __init__(self, seq_num=33, feature_num=46080, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=250, hidden_layer_size_2=250, batch_size=2):
         super().__init__()
         self.batch_size = batch_size
         self.seq_num = seq_num
@@ -165,7 +165,7 @@ def train(video_input_training):
     m = nn.LogSoftmax(dim=1)
     optimizer = optim.SGD(model.parameters(), lr=0.1)
     dataset = TensorDataset(video_input_training, obj_1_target, relation_target, obj_2_target)
-    train_loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=2, shuffle=True)
 
     for epoch in range(30000):
         total_loss = 0
@@ -184,7 +184,7 @@ def train(video_input_training):
         if epoch % 100 == 0:
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
         if epoch > 0 and epoch % 300 == 0:
-            model_name = "csz_model_after_"+str(epoch)
+            model_name = "48_model_after_"+str(epoch)
             torch.save(model, model_name)
         # if epoch > 0 and epoch % 300 == 0:
         #     test(str(epoch), model_name)
@@ -227,7 +227,9 @@ def test(epoch, model_name):
             id += 1            
     print(prediction)
     np.savetxt(outputFileName, prediction, delimiter=',', fmt="%s")
+#getVideoFeatures("../train/train", 'training')
+#getVideoFeatures("../test/test", 'testing')
 video_input_training = getVideoFeaturesFromCsv("../train/train", 'training')
-video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
-train()
+# video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
+train(video_input_training)
 #test("2400", "csz_model_after_2400")
