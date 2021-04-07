@@ -8,8 +8,8 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 obj_1_target = torch.zeros(119, device=device, dtype=int)
 obj_2_target = torch.zeros(119, device=device, dtype=int)
 relation_target = torch.zeros(119, device=device, dtype=int)
-file_indices = np.arange(start = 1000, stop = 30000, step = 1000)
-folder_name = 'MaxPool, 20480'
+file_indices = np.arange(start = 300, stop = 30000, step = 300)
+folder_name = 'traintest'
 def getTargets():
     json_target = json.load(open('test_annotation.json'))
     idx = 0
