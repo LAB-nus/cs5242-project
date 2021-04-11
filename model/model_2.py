@@ -11,13 +11,13 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 from efficientnet_pytorch import EfficientNet
-feature_file_name = "efficient_net_feature_large_3.csv"
+feature_file_name = "efficient_net_feature_large_2.csv"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 training_video_nums = 448
 test_video_nums = 128
 video_frames = 30
-feature_num = 46080
+feature_num = 20480
 word_vec_len = 100
 # Training data would be something with size [video_frames, training_video_nums, features_num]
 # For processing the images, we are going to use pretrained model. Thus we can view the input of the network as an array of
@@ -82,7 +82,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     return all_video_features
 
 class LSTM(nn.Module):
-    def __init__(self, seq_num=33, feature_num=46080, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=250, hidden_layer_size_2=250, batch_size=2):
+    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=900, hidden_layer_size_2=900, batch_size=2):
         super().__init__()
         self.batch_size = batch_size
         self.seq_num = seq_num
@@ -212,11 +212,11 @@ def test(epoch, model_name):
     model.zero_grad()
     id = 1
     outputFileName = epoch + '.csv'
-    for i in range(8):
-        batch_input = video_input_testing[i*16:i*16+16]
+    for i in range(64):
+        batch_input = video_input_testing[i*2:i*2+2]
         batch_input = torch.transpose(batch_input, 1, 0)
         obj_1, relation, obj_2 = model(batch_input)
-        for j in range(16):
+        for j in range(2):
             if id > 119 * 3:
                 break
             prediction.append([str(id-1), get_top_5(obj_1[j])])
@@ -229,7 +229,7 @@ def test(epoch, model_name):
     np.savetxt(outputFileName, prediction, delimiter=',', fmt="%s")
 #getVideoFeatures("../train/train", 'training')
 #getVideoFeatures("../test/test", 'testing')
-video_input_training = getVideoFeaturesFromCsv("../train/train", 'training')
-# video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
-train(video_input_training)
-#test("2400", "csz_model_after_2400")
+#video_input_training = getVideoFeaturesFromCsv("../train/train", 'training')
+video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
+#train(video_input_training)
+test("48_300", "48_model_after_300")

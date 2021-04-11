@@ -1,3 +1,11 @@
+# Please put this file in model/model.py
+# And the file structure would be
+# train/train/...
+# test/test/...
+# model/model.py
+# object1_object2.json
+# relationship.json
+# training_annotation.json
 import torchvision
 import torch
 import os
@@ -41,7 +49,7 @@ def getVideoFeatures(video_dir, mode):
             _,ext = os.path.splitext(image_path)
             if ext != '.jpg':
                 continue
-            tfms = transforms.Compose([transforms.Resize(224), transforms.CenterCrop(224), transforms.ToTensor(),
+            tfms = transforms.Compose([transforms.Resize(1280), transforms.CenterCrop(1280), transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
             img = tfms(Image.open(image_path)).unsqueeze(0)
             features = model.extract_features(img.to(device)).detach()
@@ -51,7 +59,7 @@ def getVideoFeatures(video_dir, mode):
         np.savetxt(video_dir + "/" + videos[i] + "/" + feature_file_name, video_features[i], delimiter=',')
 
 def compress(img_feature):
-    m = nn.AvgPool2d((2, 2), stride=(2, 2), padding=1)
+    m = nn.AvgPool2d((7, 7), stride=(7, 7), padding=1)
     pooled_feature = m(img_feature)
     return pooled_feature.reshape(-1)
 
@@ -82,7 +90,7 @@ def getVideoFeaturesFromCsv(video_dir, mode):
     return all_video_features
 
 class LSTM(nn.Module):
-    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=500, hidden_layer_size_2=500, batch_size=16):
+    def __init__(self, seq_num=33, feature_num=20480, obj_label_num=35, relation_label_num=82, hidden_layer_size_1=900, hidden_layer_size_2=900, batch_size=2):
         super().__init__()
         self.batch_size = batch_size
         self.seq_num = seq_num
@@ -122,16 +130,16 @@ class LSTM(nn.Module):
         input_for_cell = torch.cat((lstm_out_1[self.seq_num-2], word_vec), 1)            
         lstm_out_2 = self.lstm_2[self.seq_num-2](input_for_cell, lstm_out_2)
         hx, _ = lstm_out_2
-        relation_prediction = self.linear_relation(hx) # batch * obj_label_num
-        out.append(relation_prediction)
-        chosen = torch.argmax(relation_prediction, dim=1)
-        word_vec = embeds(chosen+35)
+        obj_2_prediction = self.linear_obj_2(hx) # batch * obj_label_num
+        out.append(obj_2_prediction)
+        chosen = torch.argmax(obj_2_prediction, dim=1)
+        word_vec = embeds(chosen)
 
         input_for_cell = torch.cat((lstm_out_1[self.seq_num-1], word_vec), 1)            
         lstm_out_2 = self.lstm_2[self.seq_num-1](input_for_cell, lstm_out_2)
         hx, _ = lstm_out_2
-        obj_2_prediction = self.linear_obj_2(hx) # batch * obj_label_num
-        out.append(obj_2_prediction)
+        relation_prediction = self.linear_relation(hx) # batch * obj_label_num
+        out.append(relation_prediction)
 
         return out
 
@@ -165,7 +173,7 @@ def train(video_input_training):
     m = nn.LogSoftmax(dim=1)
     optimizer = optim.SGD(model.parameters(), lr=0.1)
     dataset = TensorDataset(video_input_training, obj_1_target, relation_target, obj_2_target)
-    train_loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=2, shuffle=True)
 
     for epoch in range(30000):
         total_loss = 0
@@ -175,8 +183,8 @@ def train(video_input_training):
             model.zero_grad()
             out = model(input)
             loss_obj_1 = loss_function(m(out[0]), target_obj_1)
-            loss_relation = loss_function(m(out[1]), target_relation)
-            loss_obj_2 = loss_function(m(out[2]), target_obj_2)
+            loss_relation = loss_function(m(out[2]), target_relation)
+            loss_obj_2 = loss_function(m(out[1]), target_obj_2)
             loss = loss_obj_1 +loss_relation + loss_obj_2
             total_loss += loss
             loss.backward()
@@ -184,7 +192,7 @@ def train(video_input_training):
         if epoch % 100 == 0:
             print("epoch:", epoch, "loss", total_loss, "score_obj1", getScore(out[0], target_obj_1), "score_relation", getScore(out[1], target_relation), "score_obj2", getScore(out[2], target_obj_2))
         if epoch > 0 and epoch % 300 == 0:
-            model_name = "csz_model_after_"+str(epoch)
+            model_name = "48_model_after_"+str(epoch)
             torch.save(model, model_name)
         # if epoch > 0 and epoch % 300 == 0:
         #     test(str(epoch), model_name)
@@ -212,11 +220,11 @@ def test(epoch, model_name):
     model.zero_grad()
     id = 1
     outputFileName = epoch + '.csv'
-    for i in range(8):
-        batch_input = video_input_testing[i*16:i*16+16]
+    for i in range(64):
+        batch_input = video_input_testing[i*2:i*2+2]
         batch_input = torch.transpose(batch_input, 1, 0)
-        obj_1, relation, obj_2 = model(batch_input)
-        for j in range(16):
+        obj_1, obj_2, relation = model(batch_input)
+        for j in range(2):
             if id > 119 * 3:
                 break
             prediction.append([str(id-1), get_top_5(obj_1[j])])
@@ -227,7 +235,19 @@ def test(epoch, model_name):
             id += 1            
     print(prediction)
     np.savetxt(outputFileName, prediction, delimiter=',', fmt="%s")
-#video_input_training = getVideoFeaturesFromCsv("../train/train", 'training')
-video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing')
-#train()
-test("4800", "48_model_after_4800")
+#getVideoFeatures("../train/train", 'training') # Uncomment this line to get the video features for the training set.
+#getVideoFeatures("../test/test", 'testing') # Uncomment this line to get the video features for the testing set.
+#video_input_training = getVideoFeaturesFromCsv("../train/train", 'training') # Uncomment this line to read training video_features from disk
+video_input_testing = getVideoFeaturesFromCsv("../test/test", 'testing') # Uncomment this line to read testing video_features from disk
+#train(video_input_training) # Uncomment this line to train the model.
+test("48_3900", "48_model_after_3900") # Uncomment this line to get the test result 
+test("48_3600", "48_model_after_3600") # Uncomment this line to get the test result 
+test("48_3300", "48_model_after_3300") # Uncomment this line to get the test result 
+test("48_3000", "48_model_after_3000") # Uncomment this line to get the test result 
+test("48_2700", "48_model_after_2700") # Uncomment this line to get the test result 
+test("48_1800", "48_model_after_1800") # Uncomment this line to get the test result 
+test("48_1500", "48_model_after_1500") # Uncomment this line to get the test result 
+test("48_1200", "48_model_after_1200") # Uncomment this line to get the test result 
+test("48_900", "48_model_after_900") # Uncomment this line to get the test result 
+test("48_600", "48_model_after_600") # Uncomment this line to get the test result 
+test("48_300", "48_model_after_300") # Uncomment this line to get the test result 
